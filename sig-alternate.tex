@@ -1,0 +1,474 @@
+\documentclass{sig-alternate}
+\usepackage{enumerate}
+\usepackage{verbatim}
+\usepackage{graphicx}
+\usepackage{subfigure}
+\usepackage{rotating}
+\usepackage{cite}
+\usepackage{multirow}
+\def\thesection{\arabic{section}}
+\graphicspath{{./figures/}}
+
+\begin{document}
+\title{Parallel Power Grid Simulation with Multi Core Processors}
+
+%\author{Ting Yu, Zigang Xiao, Martin.D.F. Wong}
+%	{Depart of Electrical and Computer Engineering, UIUC\\
+%	Champaign IL 61820\\
+%	Email: tingyu1@illinois.edu, xxxxxxxxx, mfwong@illinois.edu}
+%}
+\maketitle
+
+\begin{abstract}
+	Because of technology, powergrid now are becoming more and more dense. There are usually multi-million number of nodes in
+	industry powergrid benchmarks. As a result, analyzing power grid has become both computationnally expensive and memory 
+	overconsuming. Parallel simulation is one of the most promising approaches to overcome these two main problems. Based on 
+	multi-core platform, this paper presents an effecient parallel iterative Additive Schwarz Me-thod (ASM) for large-scale 
+	power grid simulation. On one hand, a new strategy is proposed to address the large to very large scale problem size. Power 
+	grid is divided into subdomains with different domain information being written into independent files. By reading corresponding 
+	file, each processor only need to store data in one subdomain. Data load is balanced among processors and no processor
+	need to spend memory to store the whole grid information. Though the I/O process when writing files is slow, the parallism 
+	for reading files complements this cost. On the other hand, simulation time in parallel platform is mainly composed by 
+	computation time and communication time. To reduce the computation time, 2D overlapping with a 9 point stencil pattern is 
+	utilized to accelerate the convergence. Besides, via-detect techinique is presented to effectively reduce the subdomain 
+	stamped matrix size, thus greatly help reducing simulation time. To reduce the communication overhead, a new idea is 
+	proposed for boundary information exchange among processors. This strategy exibits optimal 
+	communication overhead. Besides, in this paper, group technique is proposed to further increase parallism and reduce 
+	simulation time. Experiment results on several industrial benchmarks show that the proposed method is able to achieve up to 
+	more than 110X speedup over a state-of-the-art direct LU solver. Besides, it is the first time reported in this paper that 
+	power grids contains over 190M nodes can be sucessfully solved only in less than 5 minutes.
+\end{abstract}
+
+\section{Introduction}
+	For consideration of signal integrity, verification and further design optimization, powergrid analysis is one of the most 
+	important step. To shorter the design period and cost, power grid simulation should be finished within a resonable time. 
+	However, with the fast increase in scale of VLSI circuits, nowadays, power grid usually contains millions or even hundreds 
+	of millions of nodes. The large problem size has made efficiently analyzing power grid a very chanllenging task by two aspects. 
+	On one hand, it would be prohibitively expensive for traditional solvers such as 
+	direct LU to solve the problem within a reasonable time. On the other hand, traditional methods may suffer a memory bottle 
+	neck, which makes them uncapable to process the large or very large size problem. As a result, it is strongly required to 
+	develop an efficient solver to address these problems.\\
+%\begin{comment}
+	\begin{figure}[htbp]
+	  \subfigure[][2D view of a power grid]{
+		\includegraphics[width=0.2\textwidth]{2D_pg_1_new.pdf}\label{subfig.1}}
+	  \subfigure[][3D view of power grid]{
+		\includegraphics[width=0.27\textwidth]{3D_pg_new.pdf} \label{subfig.2}}
+	  \caption{Simple model of power grid: 
+	  \subref{subfig.1} 2D view,
+	  \subref{subfig.2} 3D view.}
+	  \label{pg_model}
+	\end{figure}
+
+	Figure~\ref{pg_model} shows a two layer simplified power grid model without capacitors and inductances. Vias are used to 
+	connect different layers. If transient analysis is performed, RLC model can be used.\\ 
+
+	It is well known that analyzing the power grid equals to solving a linear system, where 
+%\end{comment}
+	\begin{equation}\label{eq1}
+		Ax=b
+	\end{equation}
+	There are several serial simulation techniques developed to solve Equation \eqref{eq1}, including multigrid\cite{kozhaya}, 
+	PCG\cite{Tsung-Hao}, random walks\cite{Boghrati}, domain-decomposition\cite{Quming}\cite{Zhongyu}, and so on. Random walks 
+	is a stastical based method, and is only efficient for simulating small subset of nodes, not all the nodes in grid. 
+	It will either be time consuming to solve all the nodes in grid, or will introduce inaccuracy in solution. The problems will
+	deteriorate for large size power grid with only a few number of VDD/GND sources. Besides, when modeling with vias, this method
+	can be trapped by vias, making the program hang forever. PCG method in\cite{Tsung-Hao} is known as the fastest linear solver 
+	for large symmetric partial differential equations. But the total performance depends on the number of iterations. If the 
+	iteration times is small, due to larger effort per iteration for PCG then other simpler methods such as Gauss-sidel, it may 
+	not be a good choice. Besides, compared to GS, PCG consumes more memory, which will limit the maximum problem size that can be 
+	solved.\\  	
+	
+	Multigrid method achieves near linear solve time with input size. The fine grid is recursively restricted into coarse ones 
+	and the solution from coarse grids will be interpolated back into fine ones. There are geometric based multigrid method as well as 
+	algebraic based multigrid method. For both methods, because of restriction and interpolation, only approximate solution can be 
+	obtained. The error can be intractable for large power grids. Domain decomposition is based on idea of "divide and conquer". 
+	There are two kinds of domain decomposition(DD): Schur Complement DD and Additive Schwarz DD. The main difference is that Shur 
+	Complement DD partitions find grid into subdomains
+	and a common interface, while in Additive Schwarz DD, there is no interface between subdomains. Overlapping can be introduced to
+	Additive Schwarz DD when partitioning, for example\cite{Zhongyu}. The limitation of Schur Complement DD is that because of the 
+	interface subdomain, there is a dense schur matrix. The dense characteristic limits the interface size, and thus decides Schur 
+	Complement DD can not solve too large a problem.\\
+
+	Considering the fact that power grid is usually in large size, even for an efficient serial solver, more and more time would be
+	spent for simulation. When the input size is above some scale, the simulation time would be inprohibitely expensive.
+	Besides, serial algorithms do not have enough memory to hold the very large scale grid size, thus are not capable to handle 
+	the problem. On the other hand, if good decision is made, parallel algorithms can bring a lot of speed up. Architectures as
+	multi-core platform also gives a potencial to address the memory issue for large problem size. As a result, parallel technique
+	is a necessary tendancy to efficiently accelerate the simulation process.\\ 
+
+	There are already several parallel method to analyze power grid, including multigrid on GPU\cite{Zhuofeng}, parallel direct LU 
+	solver\cite{Super_LU_website}, and public domain parallel ASM package\cite{PETSC_website}, parallel domain decomposition
+	\cite{kaisun}\cite{voronov}. For \cite{Zhuofeng}, though it is very fast, the above mentioned problems for multigrid still exist. 
+	If the system is ill-conditioned, this method can even have convergence problem. Besides, as mentioned before, GPU platform 
+	can not handle very large scale power grid problem.\\
+ 
+	There are two parallel direct LU solver developed in \cite{Super_LU_website}: SuperLU\_MT and SuperLU\_DIST. SuperLU\_MT is 
+	based on shared memory machine. Limited by the number of threads of shared memory machine, not too much speedup can be gained. 
+	It is reported to be only 5 to 10 folder faster than commecially popular solvers\cite{Super_LU_website}. Also, the largest problem
+	this software can solve is limited by the system memory of a single processor/core. SuperLU\_DIST is developed on distribute 
+	memory machine. The strategy it is used is to use a single processor to read in the matrix, and distributed the matrix 
+	algebratically to other processors. There is a obvious disadvantage for this strategy: the whole matrix needed to be stored 
+	in the memory of a single processor, which is a heavy load for large problem size. As a result, the problem this package can 
+	solve can not be very large as well. The largest problem size that is reported for this package is 2 million nodes
+	\cite{Super_LU_website}.\\
+
+	Domain decomposition is theoretically suitble for parallization, as there are many independent subdomains which can be
+	solved by different processors simultaneously. The public domain package PETSC\cite{PETSC_website} implemented ASM in parallel.
+	However, there is several limitations. First, PETSC can only handle regular and uniform grid, and overlapping is counted as the
+	times of pitches. Besides, ASM package in PETSC is only fit for 2D grid. Another problem is that since a global matrix is still
+	needed to be stored somewhere, it is not fit for large size problem. Parallel domain decomposition in \cite{kaisun}\cite{voronov} 
+	are implementations of SCM or ASM. Because of solving dense matrix or storing global matrix, the problem they can solve can not 
+	be very large.\\
+
+	This paper propose an efficient parallel implementation of ASM, which can not only process large to very large scale problem size, 
+	but also achieves much speedup to a state-of-art direct LU solver. The main contributions include:\\
+	\begin{enumerate}[1)]
+	\item Based on distributed memory machine, a new strategy for data storage is proposed, which can overcome the uneven data 
+	load problem of SuperLU\_DIST and PETSC, thus can handle large to very large-scale problem.
+	\item 2D partitioning is proven to has better performance than 1D partitioning. 
+	\item Fully 2D overlapping with 9 point stencil pattern is implemented to help with convergence. 
+	\item A new strategy for data communication is proposed, which achieves the optimal minimum communication overhead.
+	\item Via detect technique is presented to efficiently reduce matrix size according without loss of accuracy.
+	\item A new group techinique is introduced to further increase parallism.\\
+	\end{enumerate}
+
+	The proposed method can process irregular connected power grid. With the above mentioned techniques, it can not only solve 
+	power grid accurately and efficiently, but also can handle large to very large problem. In conclusion, the proposed method 
+	is able to effectively meet both two key requirement of power grid analysis.\\
+
+	The rest of this paper is organized as follows. Section 2 gives an overview of ASM. Section 3 prestents 
+	the parallel implementation of ASM based on a distributed memory machine. Experimental results are illustrated in section 4. 
+	Finally, conclusion is given in section 6.
+%\begin{comment} 
+
+\section{Additive Schwarz method(ASM) overview}	
+	In mathematics, the additive Schwarz method, named after Hermann Schwarz, solves a boundary value problem for a partial 
+	differential equation approximately by splitting it into boundary value problems on smaller domains and adding the results.
+	Given a symbolic 2D view of a regular power grid such as Figure~\ref{Fig1}, Figure~\ref{Fig2} shows two types of ASM. 
+	Figure~\ref{Fig2}\subref{subfig.1} shows the algebraic ASM method utilized in \cite{kaisun}. The global matrix is built first. 
+	Then, it will be partitioned into several subdomains in row direction. 
+	Overlap can be introduced at this stage, which can be seen in Figure~\ref{Fig2}\subref{subfig.1}. The partitioned subdomains
+	are then updated either with Jacobi or Gauss-sidel iteration.\\
+	\begin{figure}[htbp]
+	  \centering
+	  \includegraphics[width=0.25\textwidth]{2D_grid_new.pdf}
+	  \caption{2D view of a regular power grid}
+	  \label{Fig1}
+	\end{figure}
+	
+	\begin{figure}[htbp]
+	  \subfigure[][Algebraic ASM]{
+		\includegraphics[width=0.22\textwidth]{AASM_new.pdf}\label{subfig.1}}
+	  \subfigure[][Geometric ASM]{
+		\includegraphics[width=0.22\textwidth]{GASM_new.pdf} \label{subfig.2}}
+	  \caption{Two types of ASMs: 
+	  \subref{subfig.1} Algebraic ASM,
+	  \subref{subfig.2} Geometric ASM.}
+	  \label{Fig2}
+	\end{figure}
+
+	Figure~\ref{Fig2}\subref{subfig.2} illustrates the geomegric ASM utilized in \cite{Zhongyu}. The grid is first partitioned
+	into several subdomains. Each subdomain then forms local matrix and can be solved either by direct solvers or iterative solvers. 
+	Jacobi or Gauss-sidel method is used to update subdomains. During the partitioning stage, overlap can also be introduced.
+	Different from algebric ASM, where overlapping can only happens between a subdomain and one neighbor subdomain, in geometric ASM, 
+	fully overlapping can now happens between one subdomain and all its 8 neighboring subdomains, as is seen from Figure~\ref{Fig2}
+	\subref{subfig.2}. In the rest of this paper, this overlapping pattern is called 9 point stencil pattern.\\
+	
+%\end{comment}	
+	It is pointed out that introducing overlaping between different subdomains leads to faster convergence than non-overlapping case, 
+	as overlapping reduces the matrix eigenspectrum\cite{Klawonn}\cite{Taopeng}. The more overlapping, the faster convergence,
+	but the time spent within a subdomain would be increased. As a result, to gain the optimal total runtime, overlap ratio should 
+	be estimated based on experimental data. Besides, 
+	SOR, PCG, MG methods can be combined with ASM to accelerate convergence. However, the resulting methods are not fit for 
+	parallization of power grid simulation. The reason is as follows: SOR method is not 
+	stable, as the optimal $w$ value depends on system matrix eigenvalues. It is not only hard to choose the optimal $w$ for large
+	size problem, as it is time comsuming to do eigenvalue analysis, but also may lead to divergence with a bad $w$ value; MG may have
+	error or envn convergence problems, especially for 3D irregular structure, which is the case for power grid; In PCG, a global
+	matrix is required, which limits the maximum problem size that can be solved.\\ 
+	 
+	There are already works talk about parallization of both the 
+	nonoverlapping ASM\cite{Daoqiyang} and overlapping ASM\cite{kaisun}. As mentioned before, since overlapping ASM is faster than 
+	nonoverlapping ASM, it would be better to parallize ASM with overlapping. One problem in \cite{kaisun} is that the
+	data load is not evenly distributed. Also, the communication strategy is not trival, with the cost of gathering all the
+	nodes value in the grid and bcast it to all processors at each iteration. Since only boundary nodes values is essentially all 
+	needed for processors to update boudary value, and the number of boundary nodes is only a very tiny ratio of the whole grids' 
+	nodes, it would be ideal 
+	if each processor only sends and receives only its corresponding boundary nodes' values. 
+	However, with overlapping and irregular grid structure, how to realize the ideal case is a challenging problem, which will be
+	illustrated in section 3.\\
+ 
+\section{Parallel Implementation On \\Multi-core Processors}
+  \subsection{Parallel platform}
+	There are two types of multi-core architecture: shared memory and distributed memory machine. In shared memory machine, as 
+	multiple processes share common address space accessible to all, there is no overhead for data communication. However, the
+	maximum problem size can be solved will be limited by both limited threads and memory size. On the other hand, distributed 
+	memory machine does not suffer the above two limitations. There can be a lot of processors, while each processor has 
+	independent memory. The cost is that extra time is needed 
+	for data communication, as each processor only have accessibility to its local data. Considering the large problem size and
+	efficient simulation time requirement, distributed memory machine is obvious a better choice. We will use the widely utilized
+	message-passing library(MPI) to realize the implementation.
+  \subsection{Partitioning}
+	In \cite{Zhongyu}, 1D partitioning is thought to be in better performance than 2D partitioning. The comparison is not fair, 
+	as the number of elements in 1D partitioned subdomain and 2D partitioned subdomain is not equal. Here we illustrates that
+	for parallel consideration, 2D partitioning strategy presents a better performance than 1D 
+	partitioning. It is because partitioning across more dimensions yields more neighboring subdomains but smaller total 
+	volume of communication than partitioning across fewer dimensions, which can be showns from the following example.\\
+
+%\begin{comment}	
+	Suppose the power grid in Figure~\ref{Fig1} is partitioned in 1D subdomains and 2D subdomains, which is shown in 
+	Figure~\ref{Fig3}.
+	\begin{figure}[htbp]
+	  \subfigure[][1D partitioning]{
+		\includegraphics[width=0.22\textwidth]{1D_partition_new.pdf}\label{subfig.3.1}}
+	  \subfigure[][2D partitioning]{
+		\includegraphics[width=0.22\textwidth]{2D_partition_new.pdf}\label{subfig.3.2}}
+	  \caption{2 types of partitioning:
+	  \subref{subfig.3.1} 1D partitioning
+	  \subref{subfig.3.2} 2D partitioning }
+	  \label{Fig3}
+	\end{figure}
+
+	For fairness, in the above two types of partitioning, each subdomain in 1D partition and 2D partition has the same number
+	of nodes. As a result, the total number of subdomains for 1D partitioning and 2D partitioning is the same. For each subdomain 
+	in Figure~\ref{Fig3}\subref{subfig.3.2}, suppose it is square and each side is contains $k$ nodes. As a result, the total 
+	number of nodes needed to be interchanged with neighboring subdomains would be $4k$. On the other hand, as 
+	there are $m_2$ subdomains along vertical direction, for a subdomain in Figure~\ref{Fig3}\subref{subfig.3.1}, each side contains
+	$m_2\times k$ nodes. As a result, there are $2\times m_2\times k$ nodes needed to be interchanged with its left and right 
+	neighboring subdomains. Equation\eqref{eq2} illustrates the relationship of the communication load between these two types of
+	partitioning. As $m_2>2$ is generally always true, 2D partitioning thus have more favorable surface-to-volume ratio.    
+	\begin{equation}
+		2\times m_2\times k > 4\times k, \hspace{0.5 in} m_2 > 2 \label{eq2}
+	\end{equation}
+%\end{comment}
+	Besides, considering parallel performance, 2D partitioning presents a better scalability than 1D partitioning. This can be
+	illustrated from the isoefficiency expressions of 2 type partitoning. Isoefficiency represents the scalability of algorithm
+	with input problem size. The lower order in isoefficiency expression, the better scalabilify. Isoefficiency function for 1D 
+	and 2D partitioning is respectively $\Theta(p^2)$ and $\Theta(p)$\cite{Grama}\cite{Kumar}, where p is the number of processors. 
+	It can seen that for given number of processors, for 2D partitioning, far smaller problem is required to achieve given 
+	efficiency than with 1D partitioning.\\
+
+	Combining the two above considerations, 2D partitioning is considered in this paper.\\	
+	  
+  \subsection{Data storage}
+	In parallel program, it is very important to keep data balance between different processors. This is not only for computing
+	consideration, but also for memory storage. In \cite{Quming}, input data is first load in a single processor and distribute
+	to others, which greatly increase the memory requirement for the single processor and the problem size can be solved will be
+	limited. In this paper, we propose a new data distributing method, so that the data load for each processor is similar. As a
+	result, much more larger problem can be solved.\\
+
+	According to the number of subdomains and the grid's geometrical information, geometrical boundary information for each
+	subdomain can be extracted. With this geometrical information, the input netlists can be concluded into different files
+	corresponding to each subdomain, so that each subdomain has a indepent file which contains all the net it needs to build up
+	its local matrix. This parsing work is done by a single processor. After the file is all written, all processors will start to
+	parse data from its local file simultaneously, and build up its local matrix. By doing this, processors does not need to store
+	data that does not belong to its subdomain, thus no memory is wasted for storing irrelevant data. \\
+
+	In the above process, though I/O process is slow, compared with the strategy that a single processor read in all netlists and
+	parse all the information, the parsing stage, which occupys most part of the time, can now executed by all the processors 
+	in parallel. This time saving can totally complement the extra time for I/O process. Simulation result in Table[XXX] proves this
+	assumption.\\
+	 
+   \subsection{Direct solver within subdomain}
+	In this paper, after each subdomain builds up local matrix, direct solver is used in each subdomain to get solution. It is known
+	that a good solver can save a lot time, especially when many iterations are needed. To our knowledge, SUPER\_LU and UMFPACK are 
+	two of the most powerful direct solver packages. Work in\cite{package} compares The performance of these two packages was compared
+	in\cite{package} and it was shown that for some cases, SUPER\_LU is faster than UMFPACK, while for other cases, UMFPACK is more 
+	superior. In this paper, UMFPACK is used for illustration. Other direct solvers can also used to produce right solution.\\
+
+    \subsection{Communication overhead}
+	After each subdomain gets its local solution, before next iteration, boundary nodes value needs to be collected from its 
+	neighboring subdomains to update
+	the right hand side. In the rest of this paper, these nodes are defined as outer boundary nodes. Also, the internal nodes' 
+	values which are directly connected to those boundary nodes need to be sent out
+	to corresponding neighboring subdomains to update the right hand side of those subdomains. These nodes are defined as internal
+	boundary nodes. An intuitive strategy for sending and collecting boundary informations would be as follows:\\
+
+	\begin{enumerate}[1.]
+	  \item A subdomain sends its internal boundary nodes values sequentially to 8 neighboring subdomains;
+	  \item The subdomain  then collects its outer boundary nodes sequantially from 8 neighboring subdomains.\\
+	\end{enumerate}
+	
+ 	However, this strategy is not efficient in message passing parallel system. To analyze the reason, we can first peer the simple
+	model for time required to send message between adjacent nodes:
+	\begin{equation}
+		T_{msg} = t_s + t_wL\label{eq_msg}
+	\end{equation}
+	where $t_s$ is the start up time, $t_w$ is the incremental transfer time per word, and $L$ is the length of message in words.\\
+	
+	For most real parallel system, $t_s$ is tens of thousands larger than $t_w$. As a result, it is highly perferable to send less 
+	large messages rather than many smalle messages to reduce the start up time. Since the total number of boundary nodes is small, 
+	time spend on $t_wL$ is short. On the other hand, for the above mentioned strategy, $8\times 2 = 
+	16$ times send or receive operations is needed for a subdomain per iteration. As a result, in total $16\times t_s$ would be used 
+	for start up per iteration. As there may be a lot of iterations before reaching convergence, the total start up time
+	should not be ignored. If in each iteration, all communications can be finished in just 1 or 2 operations, minimum start up time 
+	can be achieved, which can greatly decrease the simulation time.
+	Besides, another problem with the above strategy is that the existance of overlapping makes control flow complicated. Extra work 
+	is needed to locate the index of 4 diagonal processors. The proposed method in this paper can achieve optimal minimum 
+	communication overhead with a simple control flow.\\
+
+%\begin{comment}
+	\begin{figure}[htbp]
+	  \centering
+	  \includegraphics[width=0.4\textwidth]{communication_1_new.pdf}
+	  \caption{Boundary nodes distribution}
+	  \label{comm}
+	\end{figure}
+%\end{comment}
+
+	Figure~\ref{comm} shows the boundary nodes distribution for communication. Solid grid refers to subdomains without overlapping, 
+	and dash line refers to subdomains with some extent of overlapping. The
+	top vertical short line with a node highlighted refers the vertical boundary net between subdomain 5 and subdomain 7-9, where the
+	highlighted nodes are outer boundary node set for subdomain 5. The bottom 
+	vertical short line with a node highlighted refers the boundary nets between subdomain 7-9 to subdomain 5, where the highlighted 
+	nodes are internal boundary node set for subdomain 5. The internal boundary node set are also the outer boundary node set for 
+	subdomain 7-9. As we can see, the net connection can be irregular. Because of multilayer structure of
+	power grid, the two sets of nodes will appear at different layers either at same position or different position. At the
+	same time, because of the overlapping, there can be multiple values for a node at the boundary overlapping area. For example, 
+	the top node set connected with red short lines belongs to subdomain 7 and 8. Only one value should be used for the update of 
+	subdomain 5. Here we use the node values from the latest subdomain.\\
+
+	From Figure~\ref{comm}, it can be clearly seen that for each subdomain, internal and outer boundary nodes' values 
+	are the only information needed to be communicated among processors during each iteration. Each set of nodes should be 
+	sent/received to/from different neighboring subdomains, and nodes in the overlapping area should be sent/received to/from  
+	overlapping subdomains. Based on the geometrical characstic of the internal and outer boundary nodes, they can respectively 
+	be stored in 8 node sets along 8 directions, for example south east and so on. These directions represents geometrical 
+	relationship between the subdomain and its neighboring subdomains. All 16 node sets for each subdomain will be sorted in the 
+	same pattern to make them insensitive to multilayer and irregularity structure.\\ 
+
+	Each node will be
+	indexed according to its ordering in the sorted node sets. As all the 16 node sets are soreted in the same pattern, for a node in
+	a set along some direction, the index will be identical with that in the other node set of neighboring subdomain with opposite
+	direction. For example, subdomain 5 in Figure~\ref{comm}, the nodes of internal boundary node set along west north 
+	direction are the ones of outer boundary node set along south east direction in subdomain 7. Each node in the 2 node sets 
+	shares the same index. According to the direction relationship, one type of boundary nodes' value can be correctly accessed by 
+	the other type of boundary nodes in neighboring subdomain.\\
+
+	To minimize the start up time, we integrate the 16 node sets into internal and outer boundary arrays. 
+	Within each array, the 8 node sets will be stored in the increasing order of neighboring subdomains' index. 
+	For example, in Figure~\ref{comm}, for subdomain 5, the order is from subdomain 1 to 9 
+	except subdomain 5 itself. After each iteration, each subdomain has new solution for all internal nodes. The internal 
+	boundary nodes' value will be first copied into internal boundary array. Processor 0 will gather this array from each subdomain
+	into the global internal boundary array. Then, processor 0 will reorder this array to produce outer boundary array 
+	for all subdomains. The reordering process is as follows: \\
+
+	For each subdomain, processor0 finds its neighboring subdomains by increasing index. It finds the internal boundary 
+	nodes' values for each neighboring subdomain, which is exactly the outer boundary nodes' values of the aim subdomain. Direction 
+	relationship is utilized to order the 8 internal boundary node set values into the global outer boudnary array. The 
+	global array will then be scattered from processor 0 to all processors, so that each processor has its outer boundary nodes'
+	values from 8 neighboring subdomains.\\ 
+%\begin{comment} 
+	\begin{figure}[htbp]
+	  \centering
+	  \includegraphics[width=0.45\textwidth]{reordering_new.pdf}
+	  \caption{Reorder internal boundary array into outer boundary array}
+	  \label{Fig4}
+	\end{figure}
+%\end{comment}
+
+	After a subdomain receiving its local outer boundary array, the values will be assigned to corresponding internal nodes by 
+	index. As mentioned before, in overlapping area, a outer boundary node for a subdomain can be an internal boundary node for 
+	several neighboring subdomains. For these nodes, as the outer boundary nodes' value are accessed by neighboring subdomains 
+	in the order of increasing index, the old value of the same node is covered by new ones, and the newest value
+	comes from the largest index neighboring subdomain that contains this node. As a result, the unity of boudary nodes' value 
+	is kept.\\  
+	
+	With these two arrays, only one sending and one receiving are needed. As a result, the start up time would only be $2\times 
+	t_s$, which is much less than the previously mentioned $16\times t_s$. It is also the optimal minimum start up time. On the other
+	hand, considering the time for transferring messages, which is $t_wL$ in Equation\eqref{eq_msg}, the message length is longer.
+	But since the total number of boundary nodes will always be very small, combining with the fact that $t_w$ is very small, 
+	it can be concluded that the time for transfering message is almost negligible.\\ 
+
+	Conclude from above process, the proposed strategy sucessfully achieves optimal munimum communication overhead. It  
+	not only is insensitive to multiple layers or irregular connections, but also effectively overcomes the difficulty of 
+	accessing right data introduced by overlapping.\\
+	
+  \subsection{Via-detect technique}
+	As mentioned before, power grid nodes is vertically connected by vias. If the vias are with very small resistance, or no 
+	resistance, in which case is called "shortened", those nodes always have identical voltage value. In order to decrease matrix
+	size, only one representative node should be stamped into matrix. In extreme case, if all the
+	vias are shortened, then the 3D power grid can be modeled as a 2D grid without any loss of accuracy. The resulting much smaller 
+	matrix size will make the simulation much more faster.\\ 
+ 
+	The above idea is realized by comparing via values with a threshold value. When parsing the input
+	via nets, those via nets whose value is below the threshold will be substitued as a shortened net. After reading all the 
+	input nets, all nets will be rescanned and representative nodes will be extracted from shortened nets to be stamped into matrix. 
+	Without loss of accuracy, this threshold value is experimentally set to be 1e-5.\\
+ 
+  \subsection{Group technique} 
+	Power grid is usually composed with several physically disjoint components, for example,
+	VDD and GND. If multiple voltage technique is used, more components can be included. These component can be solved independently. 
+	For a single processor, they will be solved sequentially. However, in distributed multicore machine, 
+	with enough processors, they can be solved simultaneously. MPI provides group collective communication technique, which makes 
+	it possible. Processors are grouped by component order, and all the communication of a component circuit happens only among 
+	the processors of the corresponding group. Suppose all the components have similar size, combined with above paralle program, 
+	group technique instantly cuts the runtime by half or even more. It should be noticed that group technique achieves less runtime
+	at a cost of more processors. If $p$ processors are used to parallel the simulation, with a benchmark of $n$ components, group 
+	technique will consume $n\times p$ processors. \\ 
+ 
+\section{Numerical Experiments}
+	We implemented the direct LU solver with UMFPACK on a single CPU, and parallel the proposed ASM on multi-processor platform. 
+	All codes are written in C++ and compiled with mpicxx under Linux system. 
+  \subsection{Simulation Environment}
+	The single CPU is with 2.67 GHz frequency and 24 GB RAM. The parallel platform is composed of a set of cluster 
+	computing nodes, each with two 2.67 GHz Intel Xeon hex-core processors. Each node has in total 24 GB of RAM, with about 
+	1.8 GB memory per processor. The primary network connecting the cluster machines is Voltaire QDR Infiniband. Message 
+	Passing package MPICH2 is used.  
+  \subsection{Implementation}
+	Error tolerance is set to be $10^{-5}$ for all cases to meet the following accuracy requirement:
+	\begin{equation}
+		Max(e) < 0.01 mv, Avg(e) < 0.1 mv\\ \label{eq_err}
+	\end{equation}
+	In the experiment, overlap ratio is defined the ratio between overlap length on one end to the total side length of a subdomain. 
+	To achieve a good balance between iteration numbers and matrix size, overlapping ratio is experimentally 
+	setted to be 0.2.\\
+			
+	Three sets of benchmarks are used for comparison, including 
+	industrial benchmarks ibmpg2 to ibmpg6, x250, x200, y250, y200 and 4 artifially produced benchmarks. ibmpg2 to ibmpg6 are 
+	small size wire bond type benchmarks with vias, x250, x200 and y250, y200 are respectively two median C4 type benchmarks with
+	shortened vias or regular vias. The 4 large scale benchmarks are all C4 type grids with vias. The simulation results are 
+	listed in Table \ref{tb_v}, \ref{tb_s}, \ref{tb_m}, and \ref{tb_l}.\\
+
+	\begin{table}[h]
+	  \include{./tables/table_viagroup} \label{tb_v}
+  	  \include {./tables/table_small} \label{tb_s}
+  	  \include{./tables/table_median} \label{tb_m}
+  	  \include{./tables/table_large} \label{tb_l}
+	\end{table}
+	
+	In the above Tables, \#N refers to the total number of nodes of the ckt; \#B refers to number of blocks; \#C refers to number 
+	of independent components in the 
+	ckt; $t_c$ refers the simulation time for direct LU solver. $t_p$ refers the parallel simulation time with proposed method. "-"
+	means that the algorithm is out of memory. All $t_c$ is obtained by solving the circuits with independent components. All 
+	simulation time includes both set up time and iteration time.\\
+
+	Data in Table \ref{tb_s} shows the effectiveness of via detect technique and group technique. With via detect techniqie, the 
+	number of nodes which will be stamped into matrix is decreased by nearly 2/3. At the same time, group technique sucessfully
+	further reduces parallel simulation time by half. If the 3 components are similar in size, even more simulation time can be
+	saved.\\
+
+	From Table \ref{tb_s}, \ref{tb_m}, the advantage of the proposed method is obviously, which shows tremendous 
+	speedup over direct LU solver. For each benchmark, there is at least tens of speedup, and the biggest speedup is over 110X. 
+	%%%%% need to add more data nodes to show the limitation of over much processors.
+	If more processors can get allocated, it is possible to further decrease the runtime.\\
+
+	Table \ref{tb_l} shows that multi-core platform sucessfully finished the simulation of large to very large scale power grids
+	in very short time, while LU can not even handle the problem. In the experiment, the largest problem that LU can solve is 
+	around 8M nodes per component.\\ 
+
+	It should be noticed that since each processor in multi-core system has smaller memory size in hardware, grid needs to be 
+	partitioned into enough subdomains so that each subdomain is small enough to be hold in memory. As one processor handles one 
+	subdomain, enough processors will be needed. For large scale benchmarks, if there is sufficient processor resources, there is
+	no problem to solve several components simultaneously. But if there is not enough processors, those components should be 
+	solved sequentially to save processor consumption. In Table \ref{tb_l}, netlist\_32M, netlist\_72M and netlist\_108M are 
+	simulated with components being solved simultaneously. Each component consumes 500 processors. For netlist\_144M and 
+	netlist\_192M, as not enough processors can get allocated, components are solved sequentially.\\
+
+\section{Conclusion}
+	The conclusion goes here\cite{package}.
+
+\section*{Acknowledgment}
+
+\bibliographystyle{abbrv}
+\bibliography{sig-alternate}
+\end{document}
