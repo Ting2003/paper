@@ -92,31 +92,32 @@
 
 	Considering the fact that power grid is usually in large size, even for an efficient serial solver, more and more time would be
 	spent for simulation. When the input size is above some scale, the simulation time would be inprohibitely expensive.
-	Besides, serial algorithms do not have enough memory to hold the very large scale grid size, thus are not capable to handle 
-	the problem. On the other hand, if good decision is made, parallel algorithms can bring a lot of speed up. Architectures as
-	multi-core platform also gives a potencial to address the memory issue for large problem size. As a result, parallel technique
-	is a necessary tendancy to efficiently accelerate the simulation process.\\ 
+	Besides, serial algorithms do not have enough memory to hold the very large scale grid size. On the other hand, parallelism is 
+	possible for some algorithm, and can thus bring a lot of speed up. Considering as well that architectures as multi-core platform 
+	can potentially overcome the memory issue, parallel technique is a promising tendancy to realize a good simulator.\\ 
 
-	There are already several parallel method to analyze power grid, including multigrid on GPU\cite{Zhuofeng}, parallel direct LU 
-	solver\cite{Super_LU_website}, and public domain parallel ASM package\cite{PETSC_website}, parallel domain decomposition
+	There are already several published work about analyzing power grid with parallel methods, including multigrid on GPU\cite{Zhuofeng}, parallel direct LU 
+	solver\cite{Super_LU_website}, public domain parallel ASM package\cite{PETSC_website}, and parallel domain decomposition
 	\cite{kaisun}\cite{voronov}. For \cite{Zhuofeng}, though it is very fast, the above mentioned problems for multigrid still exist. 
 	If the system is ill-conditioned, this method can even have convergence problem. Besides, as mentioned before, GPU platform 
 	can not handle very large scale power grid problem.\\
  
-	There are two parallel direct LU solver developed in \cite{Super_LU_website}: SuperLU\_MT and SuperLU\_DIST. SuperLU\_MT is 
+	SuperLU\_MT and SuperLU\_DIST are two parallel direct LU solver developed in \cite{Super_LU_website}. SuperLU\_MT is 
 	based on shared memory machine. Limited by the number of threads of shared memory machine, not too much speedup can be gained. 
-	It is reported to be only 5 to 10 folder faster than commecially popular solvers\cite{Super_LU_website}. Also, the largest problem
-	this software can solve is limited by the system memory of a single processor/core. SuperLU\_DIST is developed on distribute 
-	memory machine. The strategy it is used is to use a single processor to read in the matrix, and distributed the matrix 
-	algebratically to other processors. There is a obvious disadvantage for this strategy: the whole matrix needed to be stored 
-	in the memory of a single processor, which is a heavy load for large problem size. As a result, the problem this package can 
-	solve can not be very large as well. The largest problem size that is reported for this package is 2 million nodes
+	It is reported to be only 5 to 10 folder faster than commecially popular solvers\cite{Super_LU_website}. Besides, the largest 
+	problem this software can solve is limited by the system memory of a single processor/core. SuperLU\_DIST is developed on 
+	distribute 
+	memory machine. A single processor is used to first read in the matrix, then distribute the matrix to other processors. 
+	There is a obvious disadvantage for this strategy: as the whole matrix is stored 
+	in a single processor, it will be a heavy load for large problem size. As a result, the problem this package can 
+	process can not be very large as well. The largest problem size that is reported for this package is 2 million nodes
 	\cite{Super_LU_website}.\\
 
 	Domain decomposition is theoretically suitble for parallization, as there are many independent subdomains which can be
-	solved by different processors simultaneously. The public domain package PETSC\cite{PETSC_website} implemented ASM in parallel.
-	However, there is several limitations. First, PETSC can only handle regular and uniform grid, and overlapping is counted as the
-	times of pitches. Besides, ASM package in PETSC is only fit for 2D grid. Another problem is that since a global matrix is still
+	solved by different processors simultaneously. Public domain package PETSC\cite{PETSC_website} implements ASM in parallel.
+	However, there are several limitations. First, PETSC can only handle regular and uniform grid. Thought overlapping is 
+	used, but the overlapping amount is counted as the times of pitches, which is not the case for irregular connected grid. 
+	Besides, ASM package in PETSC is only fit for 2D grid. Another problem is that since a global matrix is still
 	needed to be stored somewhere, it is not fit for large size problem. Parallel domain decomposition in \cite{kaisun}\cite{voronov} 
 	are implementations of SCM or ASM. Because of solving dense matrix or storing global matrix, the problem they can solve can not 
 	be very large.\\
@@ -124,8 +125,8 @@
 	This paper propose an efficient parallel implementation of ASM, which can not only process large to very large scale problem size, 
 	but also achieves much speedup to a state-of-art direct LU solver. The main contributions include:\\
 	\begin{enumerate}[1)]
-	\item Based on distributed memory machine, a new strategy for data storage is proposed, which can overcome the uneven data 
-	load problem of SuperLU\_DIST and PETSC, thus can handle large to very large-scale problem.
+	\item Based on distributed memory machine, a new data storage strategy is proposed, which can overcome the uneven data 
+	load problem of SuperLU\_DIST and PETSC. The new method can thus handle large to very large-scale problem.
 	\item 2D partitioning is proven to has better performance than 1D partitioning. 
 	\item Fully 2D overlapping with 9 point stencil pattern is implemented to help with convergence. 
 	\item A new strategy for data communication is proposed, which achieves the optimal minimum communication overhead.
