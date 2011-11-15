@@ -265,14 +265,7 @@
 	time doing by a single processor, can now be executed by all the processors in parallel. As a result, there will not be extra
 	overhead with this strategy. Simulation result in Table[XXX] proves this assumption.\\
 	 
-   \subsection{Direct solver within subdomain}
-	In this paper, after each subdomain builds up local matrix, direct solver is used in each subdomain to get solution. To our 
-	knowledge, SUPER\_LU and UMFPACK are 
-	two of the most powerful direct solver packages. Their performance comparison has been done 
-	in\cite{package} and it is shown that there is no obvious advantage on one over the other. In this paper, UMFPACK is used for 
-	illustration. Other direct solvers can also used to produce right solution.\\
-
-    \subsection{Communication overhead}
+       \subsection{Communication overhead}
 	After each subdomain gets its local solution, before next iteration, boundary nodes value needs to be collected from its 
 	neighboring subdomains to update
 	the right hand side. In the rest of this paper, these nodes are defined as outer boundary nodes. Also, the internal nodes' 
