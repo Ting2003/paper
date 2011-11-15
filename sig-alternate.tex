@@ -127,10 +127,9 @@
 	\begin{enumerate}[1)]
 	\item Based on distributed memory machine, a new data storage strategy is proposed, which can overcome the uneven data 
 	load problem of SuperLU\_DIST and PETSC. The new method can thus handle large to very large-scale problem.
-	\item 2D partitioning is proven to has better performance than 1D partitioning. 
-	\item Fully 2D overlapping with 9 point stencil pattern is implemented to help with convergence. 
-	\item A new strategy for data communication is proposed, which achieves the optimal minimum communication overhead.
-	\item Via detect technique is presented to efficiently reduce matrix size according without loss of accuracy.
+	\item Fully irregular grid friendly 2D overlapping with 9 point stencil pattern is implemented to help convergence. 
+	\item A new data communication mechanism is proposed, which achieves the optimal minimum communication overhead.
+	\item Via detect technique is presented to efficiently reduce matrix size without loss of accuracy.
 	\item A new group techinique is introduced to further increase parallism.\\
 	\end{enumerate}
 
@@ -171,50 +170,47 @@
 
 	Figure~\ref{Fig2}\subref{subfig.2} illustrates the geomegric ASM utilized in \cite{Zhongyu}. The grid is first partitioned
 	into several subdomains. Each subdomain then forms local matrix and can be solved either by direct solvers or iterative solvers. 
-	Jacobi or Gauss-sidel method is used to update subdomains. During the partitioning stage, overlap can also be introduced.
+	Jacobi or Gauss-sidel method is used to update subdomains. Overlap can be introduced during the partitioning stage.
 	Different from algebric ASM, where overlapping can only happens between a subdomain and one neighbor subdomain, in geometric ASM, 
 	fully overlapping can now happens between one subdomain and all its 8 neighboring subdomains, as is seen from Figure~\ref{Fig2}
-	\subref{subfig.2}. In the rest of this paper, this overlapping pattern is called 9 point stencil pattern.\\
+	\subref{subfig.2}. For the rest of this paper, this overlapping pattern is called 9 point stencil pattern.\\
 	
 %\end{comment}	
-	It is pointed out that introducing overlaping between different subdomains leads to faster convergence than non-overlapping case, 
+	It is pointed out that introducing overlaping between different subdomains leads to faster convergence, 
 	as overlapping reduces the matrix eigenspectrum\cite{Klawonn}\cite{Taopeng}. The more overlapping, the faster convergence,
-	but the time spent within a subdomain would be increased. As a result, to gain the optimal total runtime, overlap ratio should 
-	be estimated based on experimental data. Besides, 
-	SOR, PCG, MG methods can be combined with ASM to accelerate convergence. However, the resulting methods are not fit for 
-	parallization of power grid simulation. The reason is as follows: SOR method is not 
-	stable, as the optimal $w$ value depends on system matrix eigenvalues. It is not only hard to choose the optimal $w$ for large
-	size problem, as it is time comsuming to do eigenvalue analysis, but also may lead to divergence with a bad $w$ value; MG may have
-	error or envn convergence problems, especially for 3D irregular structure, which is the case for power grid; In PCG, a global
+	but the equivalent subdomain size will  be increased. As a result, there is a balance point for overlap ratio to gain the 
+	optimal total runtime. SOR, PCG, MG methods can be combined with ASM to accelerate convergence. However, the resulting methods
+	are not fit for parallization. The reasons are as follows: SOR method is not 
+	stable, as the optimal $w$ value depends on system matrix eigenvalues. It is hard to choose the optimal $w$ for large
+	size problem, a bad $w$ value can even lead to divergence; MG may have
+	error or even convergence problems, especially for 3D irregular grid; In PCG, a global
 	matrix is required, which limits the maximum problem size that can be solved.\\ 
 	 
-	There are already works talk about parallization of both the 
-	nonoverlapping ASM\cite{Daoqiyang} and overlapping ASM\cite{kaisun}. As mentioned before, since overlapping ASM is faster than 
-	nonoverlapping ASM, it would be better to parallize ASM with overlapping. One problem in \cite{kaisun} is that the
+	There are already works talk about parallization of overlapping ASM, such as\cite{kaisun}. One problem in \cite{kaisun} is 
+	that the
 	data load is not evenly distributed. Also, the communication strategy is not trival, with the cost of gathering all the
-	nodes value in the grid and bcast it to all processors at each iteration. Since only boundary nodes values is essentially all 
+	nodes value in the grid and bcast it to all processors at each iteration. Since only boundary nodes values are essentially all 
 	needed for processors to update boudary value, and the number of boundary nodes is only a very tiny ratio of the whole grids' 
-	nodes, it would be ideal 
-	if each processor only sends and receives only its corresponding boundary nodes' values. 
-	However, with overlapping and irregular grid structure, how to realize the ideal case is a challenging problem, which will be
+	nodes, it would be a waste to gathering all nodes' value each iteratoin. The ideal case would be 
+	each processor only sends and receives only its corresponding boundary nodes' values from/to its neighboring subdomains. 
+	However, because of overlapping and irregular grid structure, it is a challenging problem to realize this idea, which is
 	illustrated in section 3.\\
  
 \section{Parallel Implementation On \\Multi-core Processors}
   \subsection{Parallel platform}
 	There are two types of multi-core architecture: shared memory and distributed memory machine. In shared memory machine, as 
-	multiple processes share common address space accessible to all, there is no overhead for data communication. However, the
-	maximum problem size can be solved will be limited by both limited threads and memory size. On the other hand, distributed 
-	memory machine does not suffer the above two limitations. There can be a lot of processors, while each processor has 
-	independent memory. The cost is that extra time is needed 
-	for data communication, as each processor only have accessibility to its local data. Considering the large problem size and
-	efficient simulation time requirement, distributed memory machine is obvious a better choice. We will use the widely utilized
-	message-passing library(MPI) to realize the implementation.
+	multiple processes share common address space accessible to all, there is no overhead for data communication. However, limited
+	by number of threads and memory size, it is not suitable for the problem. On the other hand, distributed 
+	memory machine can be composed by a lot of processors, while each processor has independent memory. The cost is that extra time 
+	is needed for data communication, as each processor only have accessibility to its local data. Considering the large problem 
+	size and efficient simulation time requirement, distributed memory machine would be a better choice. The implementation is based
+	on widely utilized message-passing library(MPI).
   \subsection{Partitioning}
-	In \cite{Zhongyu}, 1D partitioning is thought to be in better performance than 2D partitioning. The comparison is not fair, 
-	as the number of elements in 1D partitioned subdomain and 2D partitioned subdomain is not equal. Here we illustrates that
-	for parallel consideration, 2D partitioning strategy presents a better performance than 1D 
-	partitioning. It is because partitioning across more dimensions yields more neighboring subdomains but smaller total 
-	volume of communication than partitioning across fewer dimensions, which can be showns from the following example.\\
+	In \cite{Zhongyu}, 1D partitioning is thought to be in better performance than 2D partitioning. However, the comparison is not 
+	fair, as the number of elements in 1D partitioned subdomain and 2D partitioned subdomain are not equal. Here we illustrates that
+	for parallel consideration, 2D partitioning strategy presents a better performance than 1D partitioning. It is because 
+	partitioning across more dimensions yields more neighboring subdomains but smaller total volume of communication than 
+	partitioning across fewer dimensions, which is shown in the following example.\\
 
 %\begin{comment}	
 	Suppose the power grid in Figure~\ref{Fig1} is partitioned in 1D subdomains and 2D subdomains, which is shown in 
@@ -249,33 +245,32 @@
 	It can seen that for given number of processors, for 2D partitioning, far smaller problem is required to achieve given 
 	efficiency than with 1D partitioning.\\
 
-	Combining the two above considerations, 2D partitioning is considered in this paper.\\	
+	Combining the two considerations, 2D partitioning is chosen in this paper.\\	
 	  
   \subsection{Data storage}
-	In parallel program, it is very important to keep data balance between different processors. This is not only for computing
-	consideration, but also for memory storage. In \cite{Quming}, input data is first load in a single processor and distribute
-	to others, which greatly increase the memory requirement for the single processor and the problem size can be solved will be
-	limited. In this paper, we propose a new data distributing method, so that the data load for each processor is similar. As a
-	result, much more larger problem can be solved.\\
+	In parallel program, it is very important to keep data balance among processors. This is not only for computing
+	consideration, but also for memory storage consideration. In \cite{Quming}, input data is first loaded into a single processor 
+	and distribute to others. By doing this, the single processor will spend a lot of extra memory for storing the data. As a result,
+	the problem size can be solved will be limited. In this paper, we propose a new data distributing method, so that the amount of
+	data being loaded for each processor is similar. This strategy effectively eliminates the limitation of problem size.\\
 
 	According to the number of subdomains and the grid's geometrical information, geometrical boundary information for each
-	subdomain can be extracted. With this geometrical information, the input netlists can be concluded into different files
-	corresponding to each subdomain, so that each subdomain has a indepent file which contains all the net it needs to build up
-	its local matrix. This parsing work is done by a single processor. After the file is all written, all processors will start to
-	parse data from its local file simultaneously, and build up its local matrix. By doing this, processors does not need to store
-	data that does not belong to its subdomain, thus no memory is wasted for storing irrelevant data. \\
+	subdomain can be extracted. With this geometrical information, input netlists can be concluded into different files.
+	Each subdomain has a indepent file which contains all the nets information within it to build up its local matrix. 
+	This stage is done by a single processor. Then, all processors will parse data from corresponding file simultaneously, and build 
+	up local matrix. By doing this, processors does not need to store data that belongs to other subdomains, thus no memory is 
+	wasted for storing irrelevant data. \\
 
-	In the above process, though I/O process is slow, compared with the strategy that a single processor read in all netlists and
-	parse all the information, the parsing stage, which occupys most part of the time, can now executed by all the processors 
-	in parallel. This time saving can totally complement the extra time for I/O process. Simulation result in Table[XXX] proves this
-	assumption.\\
+	In the above process, though I/O process of writing files is slow, the parsing stage, which previously occupys most part of the 
+	time doing by a single processor, can now be executed by all the processors in parallel. As a result, there will not be extra
+	overhead with this strategy. Simulation result in Table[XXX] proves this assumption.\\
 	 
    \subsection{Direct solver within subdomain}
-	In this paper, after each subdomain builds up local matrix, direct solver is used in each subdomain to get solution. It is known
-	that a good solver can save a lot time, especially when many iterations are needed. To our knowledge, SUPER\_LU and UMFPACK are 
-	two of the most powerful direct solver packages. Work in\cite{package} compares The performance of these two packages was compared
-	in\cite{package} and it was shown that for some cases, SUPER\_LU is faster than UMFPACK, while for other cases, UMFPACK is more 
-	superior. In this paper, UMFPACK is used for illustration. Other direct solvers can also used to produce right solution.\\
+	In this paper, after each subdomain builds up local matrix, direct solver is used in each subdomain to get solution. To our 
+	knowledge, SUPER\_LU and UMFPACK are 
+	two of the most powerful direct solver packages. Their performance comparison has been done 
+	in\cite{package} and it is shown that there is no obvious advantage on one over the other. In this paper, UMFPACK is used for 
+	illustration. Other direct solvers can also used to produce right solution.\\
 
     \subsection{Communication overhead}
 	After each subdomain gets its local solution, before next iteration, boundary nodes value needs to be collected from its 
