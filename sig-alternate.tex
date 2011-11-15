@@ -265,21 +265,24 @@
 	time doing by a single processor, can now be executed by all the processors in parallel. As a result, there will not be extra
 	overhead with this strategy. Simulation result in Table[XXX] proves this assumption.\\
 	 
-       \subsection{Communication overhead}
-	After each subdomain gets its local solution, before next iteration, boundary nodes value needs to be collected from its 
-	neighboring subdomains to update
-	the right hand side. In the rest of this paper, these nodes are defined as outer boundary nodes. Also, the internal nodes' 
-	values which are directly connected to those boundary nodes need to be sent out
-	to corresponding neighboring subdomains to update the right hand side of those subdomains. These nodes are defined as internal
-	boundary nodes. An intuitive strategy for sending and collecting boundary informations would be as follows:\\
+     \subsection{Communication overhead}
+	Each domain matrix is solved by direct solvers, which is UMFPACK in this paper. After gaining local solutions for each subdomain, 
+	before next iteration, for each subdomain, boundary nodes need to be updated. It should be noticed that with overlapping, there
+	are two types of boundary nodes: First type is nodes that do no belong to one subdomain, but are connected to internal nodes of 
+	this subdomain; Second type is nodes that belongs to the same subdomain but are boundary nodes of neighboring subdomains. The 
+	two types of boundary nodes are illustrated in Figure~\ref{comm}. Both types nodes are referred to some subdomain, for eg., 
+	subdomain $5$ in Figure~\ref{comm}. In the rest of this paper, the first type nodes are defined
+	"outer boundary nodes", and second types nodes are defined "internal boundary nodes".\\ 
+
+	An intuitive strategy for sending and collecting boundary information would be as follows:
 
 	\begin{enumerate}[1.]
-	  \item A subdomain sends its internal boundary nodes values sequentially to 8 neighboring subdomains;
-	  \item The subdomain  then collects its outer boundary nodes sequantially from 8 neighboring subdomains.\\
-	\end{enumerate}
-	
- 	However, this strategy is not efficient in message passing parallel system. To analyze the reason, we can first peer the simple
-	model for time required to send message between adjacent nodes:
+	  \item A subdomain sends its internal boundary nodes' values sequentially to 8 neighboring subdomains;
+	  \item This subdomain then collects its outer boundary nodes' values sequantially from 8 neighboring subdomains.
+	\end{enumerate}	
+
+ 	However, this strategy is not efficient in message passing parallel system. The reason can be seen from analyzing can the simple
+	communication model for transferring message between adjacent nodes:
 	\begin{equation}
 		T_{msg} = t_s + t_wL\label{eq_msg}
 	\end{equation}
@@ -288,13 +291,14 @@
 	For most real parallel system, $t_s$ is tens of thousands larger than $t_w$. As a result, it is highly perferable to send less 
 	large messages rather than many smalle messages to reduce the start up time. Since the total number of boundary nodes is small, 
 	time spend on $t_wL$ is short. On the other hand, for the above mentioned strategy, $8\times 2 = 
-	16$ times send or receive operations is needed for a subdomain per iteration. As a result, in total $16\times t_s$ would be used 
-	for start up per iteration. As there may be a lot of iterations before reaching convergence, the total start up time
-	should not be ignored. If in each iteration, all communications can be finished in just 1 or 2 operations, minimum start up time 
-	can be achieved, which can greatly decrease the simulation time.
-	Besides, another problem with the above strategy is that the existance of overlapping makes control flow complicated. Extra work 
-	is needed to locate the index of 4 diagonal processors. The proposed method in this paper can achieve optimal minimum 
-	communication overhead with a simple control flow.\\
+	16$ times of sending and receiving operations are needed for a subdomain per iteration. As a result, in total $16\times t_s$ 
+	would be needed for starting up per iteration. As a lot of iterations may required beforing reaching convergence, the total 
+	start up time should not be ignored in this case. This overhead can be minimized by taking another optimized strategy, where
+	in each iteration, only 1 or 2 transferring are needed for communication. With this strategy, minimum start up time can be 
+	achieved, and simulation time can be greatly decreased. However, the above strategy is challenging to implement, as the grid
+	is irregular, and the existance of overlapping makes it even more complicated, as the neighboring subdomains are increased from
+	4 to 8, with different overlapping patterns. The proposed method in this paper can achieve optimal minimum communication 
+	overhead with a simple control flow, which is shown as follows.\\
 
 %\begin{comment}
 	\begin{figure}[htbp]
@@ -305,47 +309,46 @@
 	\end{figure}
 %\end{comment}
 
-	Figure~\ref{comm} shows the boundary nodes distribution for communication. Solid grid refers to subdomains without overlapping, 
-	and dash line refers to subdomains with some extent of overlapping. The
-	top vertical short line with a node highlighted refers the vertical boundary net between subdomain 5 and subdomain 7-9, where the
-	highlighted nodes are outer boundary node set for subdomain 5. The bottom 
-	vertical short line with a node highlighted refers the boundary nets between subdomain 7-9 to subdomain 5, where the highlighted 
-	nodes are internal boundary node set for subdomain 5. The internal boundary node set are also the outer boundary node set for 
-	subdomain 7-9. As we can see, the net connection can be irregular. Because of multilayer structure of
-	power grid, the two sets of nodes will appear at different layers either at same position or different position. At the
-	same time, because of the overlapping, there can be multiple values for a node at the boundary overlapping area. For example, 
-	the top node set connected with red short lines belongs to subdomain 7 and 8. Only one value should be used for the update of 
-	subdomain 5. Here we use the node values from the latest subdomain.\\
+	Figure~\ref{comm} shows the boundary nodes' distribution along vertical direction. Solid blocks refer to subdomains without 
+	overlapping, while dash blocks refer to subdomains with some extent of overlapping. Both outer boundary nodes and internal
+	boundary nodes for subdomain 5 are marked in Figure~\ref{comm}. As we can see, the net connection can be irregular. On the
+	other hand, as power grid is in multilayer structure, the internal and outer boundary nodes will appear at different positions
+	among different layers. At the
+	same time, because of overlapping, there can be multiple solution for a node's value at the boundary overlapping area, for eg.,
+	the top nodes connected to red short lines that belongs to subdomain 7 and 8. Only one value should be used to 
+	update subdomain 5. Here we use the node values from the latest subdomain.\\
 
 	From Figure~\ref{comm}, it can be clearly seen that for each subdomain, internal and outer boundary nodes' values 
-	are the only information needed to be communicated among processors during each iteration. Each set of nodes should be 
-	sent/received to/from different neighboring subdomains, and nodes in the overlapping area should be sent/received to/from  
-	overlapping subdomains. Based on the geometrical characstic of the internal and outer boundary nodes, they can respectively 
-	be stored in 8 node sets along 8 directions, for example south east and so on. These directions represents geometrical 
-	relationship between the subdomain and its neighboring subdomains. All 16 node sets for each subdomain will be sorted in the 
-	same pattern to make them insensitive to multilayer and irregularity structure.\\ 
+	are the only information needed to be communicated among processors during each iteration. Both types of nodes should be 
+	sent/received to/from neighboring subdomains, and nodes in the overlapping area should be sent/received to/from  
+	overlapping subdomains. Based on the geometrical characteristic of internal and outer boundary nodes, they can respectively 
+	be stored in 8 node sets along 8 directions, for example "south east" and so on. These directions represent geometrical 
+	relationship between two subdomains. As a result, for each subdomain, there are 16 node sets required to store both types of 
+	nodes along different directions. All these node sets will be sorted in the same pattern to make them insensitive to 
+	multilayer and irregular structure.\\ 
 
 	Each node will be
-	indexed according to its ordering in the sorted node sets. As all the 16 node sets are soreted in the same pattern, for a node in
-	a set along some direction, the index will be identical with that in the other node set of neighboring subdomain with opposite
-	direction. For example, subdomain 5 in Figure~\ref{comm}, the nodes of internal boundary node set along west north 
-	direction are the ones of outer boundary node set along south east direction in subdomain 7. Each node in the 2 node sets 
-	shares the same index. According to the direction relationship, one type of boundary nodes' value can be correctly accessed by 
-	the other type of boundary nodes in neighboring subdomain.\\
+	indexed according to its ordering in the sorted node sets. As all the 16 node sets are sorted in the same pattern, for a node in
+	a set along some direction, its index will be identical with that in the node set of neighboring subdomain with opposite
+	direction. For example, in Figure~\ref{comm}, internal boundary nodes along "west north" 
+	direction of subdomain 5 are also the outer boundary nodes along "south east" direction of subdomain 7. Each node in the 
+	2 node sets shares the same index. With this relationship, one type of boundary nodes' value can be 
+	correctly accessed by the other type of boundary nodes in neighboring subdomain.\\
 
 	To minimize the start up time, we integrate the 16 node sets into internal and outer boundary arrays. 
 	Within each array, the 8 node sets will be stored in the increasing order of neighboring subdomains' index. 
-	For example, in Figure~\ref{comm}, for subdomain 5, the order is from subdomain 1 to 9 
-	except subdomain 5 itself. After each iteration, each subdomain has new solution for all internal nodes. The internal 
-	boundary nodes' value will be first copied into internal boundary array. Processor 0 will gather this array from each subdomain
+	After each iteration, each subdomain has new solutions for all internal nodes. The internal 
+	boundary nodes' value will then be copied into internal boundary array. Processor 0 will gather this array from each subdomain
 	into the global internal boundary array. Then, processor 0 will reorder this array to produce outer boundary array 
-	for all subdomains. The reordering process is as follows: \\
+	for all subdomains, so that all subdomains can received the right values for its outer boundary array.\\ 
 
-	For each subdomain, processor0 finds its neighboring subdomains by increasing index. It finds the internal boundary 
-	nodes' values for each neighboring subdomain, which is exactly the outer boundary nodes' values of the aim subdomain. Direction 
-	relationship is utilized to order the 8 internal boundary node set values into the global outer boudnary array. The 
+	The reordering process is shown in Figure~\ref{Fig4}: \\
+
+	For each subdomain, processor 0 scans its neighboring subdomains by increasing index and finds the internal boundary 
+	nodes' values of each neighboring subdomain from global internal boundary array. Then, according to the geometrical relationship,
+	these values are copied into the right position of global outer boundary array. into the outer boundary node array. The reordered 
 	global array will then be scattered from processor 0 to all processors, so that each processor has its outer boundary nodes'
-	values from 8 neighboring subdomains.\\ 
+	values from 8 neighboring subdomains ready for update.\\ 
 %\begin{comment} 
 	\begin{figure}[htbp]
 	  \centering
@@ -355,18 +358,17 @@
 	\end{figure}
 %\end{comment}
 
-	After a subdomain receiving its local outer boundary array, the values will be assigned to corresponding internal nodes by 
-	index. As mentioned before, in overlapping area, a outer boundary node for a subdomain can be an internal boundary node for 
-	several neighboring subdomains. For these nodes, as the outer boundary nodes' value are accessed by neighboring subdomains 
+	After a subdomain receiving its local outer boundary array, the values will be assigned to corresponding internal nodes. As 
+	mentioned before, in overlapping area, several different values will be gained from overlapping subdomains. For these nodes, 
+	as the outer boundary nodes' value are accessed by neighboring subdomains 
 	in the order of increasing index, the old value of the same node is covered by new ones, and the newest value
-	comes from the largest index neighboring subdomain that contains this node. As a result, the unity of boudary nodes' value 
-	is kept.\\  
+	comes from the largest index neighboring subdomain that contains this node.\\  
 	
-	With these two arrays, only one sending and one receiving are needed. As a result, the start up time would only be $2\times 
-	t_s$, which is much less than the previously mentioned $16\times t_s$. It is also the optimal minimum start up time. On the other
-	hand, considering the time for transferring messages, which is $t_wL$ in Equation\eqref{eq_msg}, the message length is longer.
-	But since the total number of boundary nodes will always be very small, combining with the fact that $t_w$ is very small, 
-	it can be concluded that the time for transfering message is almost negligible.\\ 
+	In the above method, only one sending and one receiving operations are needed. As a result, the start up time would only be 
+	$2\times t_s$, which is much less than the previously mentioned $16\times t_s$. In fact, it is also the optimal minimum 
+	start up time for this problem. On the other hand, time for transferring messages would be longer. But since the total number 
+	of boundary nodes will always be very small, combining with the fact that $t_w$ is very small, it can be concluded that the 
+	time for transfering message is almost negligible.\\ 
 
 	Conclude from above process, the proposed strategy sucessfully achieves optimal munimum communication overhead. It  
 	not only is insensitive to multiple layers or irregular connections, but also effectively overcomes the difficulty of 
@@ -379,24 +381,22 @@
 	vias are shortened, then the 3D power grid can be modeled as a 2D grid without any loss of accuracy. The resulting much smaller 
 	matrix size will make the simulation much more faster.\\ 
  
-	The above idea is realized by comparing via values with a threshold value. When parsing the input
-	via nets, those via nets whose value is below the threshold will be substitued as a shortened net. After reading all the 
-	input nets, all nets will be rescanned and representative nodes will be extracted from shortened nets to be stamped into matrix. 
-	Without loss of accuracy, this threshold value is experimentally set to be 1e-5.\\
+	We set a threshold value for via nets. Via nets whose value is below this threshold will be substitued as a shortened net. 
+	For nodes connected by shortened net, only a representative nodes will be extracted and stamped into matrix. Without loss 
+	of accuracy, this threshold value is experimentally set to be 1e-5.\\
  
   \subsection{Group technique} 
 	Power grid is usually composed with several physically disjoint components, for example,
-	VDD and GND. If multiple voltage technique is used, more components can be included. These component can be solved independently. 
-	For a single processor, they will be solved sequentially. However, in distributed multicore machine, 
-	with enough processors, they can be solved simultaneously. MPI provides group collective communication technique, which makes 
-	it possible. Processors are grouped by component order, and all the communication of a component circuit happens only among 
-	the processors of the corresponding group. Suppose all the components have similar size, combined with above paralle program, 
-	group technique instantly cuts the runtime by half or even more. It should be noticed that group technique achieves less runtime
-	at a cost of more processors. If $p$ processors are used to parallel the simulation, with a benchmark of $n$ components, group 
-	technique will consume $n\times p$ processors. \\ 
+	VDD and GND. With multi-voltage controlled power grid, there are also components as VDD2 and so on. If multiple voltage 
+	technique is used, more components can be included. More parallel would be introduced if these independent component can be solved 
+	simultaneously. Distributed multicore machine make this implementation possible. With group collective communication technique of
+	MPI, processors are grouped to be several clusters. Each cluster will handle one component. Suppose all the components have 
+	similar size, combined with above paralle program, group technique instantly cuts the runtime by half or even more. 
+	It should be noticed that group technique achieves less runtime at a cost of more processors. If $p$ processors are used to 
+	parallel the simulation, with a benchmark of $n$ components, group technique will consume $n\times p$ processors. \\ 
  
 \section{Numerical Experiments}
-	We implemented the direct LU solver with UMFPACK on a single CPU, and parallel the proposed ASM on multi-processor platform. 
+	We implemented the direct LU solver with UMFPACK on a single CPU, and parallelize the proposed ASM on multi-processor platform. 
 	All codes are written in C++ and compiled with mpicxx under Linux system. 
   \subsection{Simulation Environment}
 	The single CPU is with 2.67 GHz frequency and 24 GB RAM. The parallel platform is composed of a set of cluster 
@@ -408,8 +408,8 @@
 	\begin{equation}
 		Max(e) < 0.01 mv, Avg(e) < 0.1 mv\\ \label{eq_err}
 	\end{equation}
-	In the experiment, overlap ratio is defined the ratio between overlap length on one end to the total side length of a subdomain. 
-	To achieve a good balance between iteration numbers and matrix size, overlapping ratio is experimentally 
+	In the experiment, overlap ratio is defined to be the ratio between overlap length on one direction to the total side length of 
+	a subdomain. To achieve a good balance between iteration numbers and matrix size, overlapping ratio is experimentally 
 	setted to be 0.2.\\
 			
 	Three sets of benchmarks are used for comparison, including 
@@ -431,7 +431,7 @@
 	means that the algorithm is out of memory. All $t_c$ is obtained by solving the circuits with independent components. All 
 	simulation time includes both set up time and iteration time.\\
 
-	Data in Table \ref{tb_s} shows the effectiveness of via detect technique and group technique. With via detect techniqie, the 
+	Data in Table \ref{tb_s} shows the effectiveness of via detect technique and group technique. With via detect technique, the 
 	number of nodes which will be stamped into matrix is decreased by nearly 2/3. At the same time, group technique sucessfully
 	further reduces parallel simulation time by half. If the 3 components are similar in size, even more simulation time can be
 	saved.\\
@@ -454,7 +454,8 @@
 	netlist\_192M, as not enough processors can get allocated, components are solved sequentially.\\
 
 \section{Conclusion}
-	The conclusion goes here\cite{package}.
+	In this paper, the detail implementation of distributed machine based parallel ASM for DC power grid analysis is presented. 
+A new strategy is proposed to efficiently handle the large problem size. Irregular and multilayer grid friendly overlapping is introduced to accerelate the convergence. A new method is presented to achieve the minimum communication overhead. Via detect and group technique is adoped to decrease the problem size, and introduce more parallelism. With the above method, experiments based on several industrial benchmarks are processed and the results shows that more than 110X speedup are gained over a state of art LU solver. It is also the first time reported that benchmark as large as 192M can be processed and finished within 5 minutes. With enough processors, even larger benchmarks can be simulated.
 
 \section*{Acknowledgment}
 
