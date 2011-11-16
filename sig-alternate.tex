@@ -20,34 +20,32 @@
 \maketitle
 
 \begin{abstract}
-	Due to the development of deep submicron technique, powergrid now are growing to be more and more dense. There are usually 
+	Due to the development of deep submicron technique, powergrid now are growing to be denser and denser. There are usually 
 	multi-million number of nodes in industry powergrid benchmarks. As a result, analyzing power grid has become both 
 	computationnally expensive and memory 
 	overconsuming. Parallel simulation is one of the most promising approaches to overcome these two main problems. Based on 
-	multi-core platform, this paper presents an effecient parallel iterative Additive Schwarz Me-thod (ASM) for large-scale 
-	power grid simulation. On one hand, a new strategy is proposed to address the large to very large scale problem size. Power 
-	grid is divided into subdomains with different domain information being written into independent files. By reading corresponding 
-	file, each processor only need to store data in one subdomain. Data load is balanced among processors and no processor
-	need to spend memory to store the whole grid information. On the other hand, simulation time in parallel platform is mainly composed by 
-	computation time and communication time. To reduce the computation time, 2D overlapping with a 9 point stencil pattern is 
-	utilized to accelerate the convergence. Besides, via-detect techinique is presented to effectively reduce the subdomain 
-	stamped matrix size, thus greatly help reducing simulation time. To reduce the communication overhead, a new idea is 
-	proposed for boundary information exchange among processors. This strategy exibits optimal 
-	communication overhead. Besides, in this paper, group technique is proposed to further increase parallism and reduce 
-	simulation time. Experiment results on several industrial benchmarks show that the proposed method is able to achieve up to 
-	more than 110X speedup over a state-of-the-art direct LU solver. Besides, it is the first time reported in this paper that 
-	power grids contains over 190M nodes can be sucessfully solved only in less than 5 minutes.
+	multi-core platform, this paper presents an effecient parallel iterative Additive Schwarz Method (ASM) for large-scale 
+	power grid simulation. On one hand, a new strategy is proposed to address the large to very large scale problem size. Different
+	from traditional parallel domain decomposition method, where a single processor needs to store the whole grid information, 
+	in this paper, each processor only need to store the information of a subdomain. Memory bottleneck of traditional parallel 
+	domain decomposition is eliminated and can thus handle much larger problem size. 
+	On the other hand, techniques as 2D overlapping with a 9 point stencil pattern, via-detect as well as group technique are  
+	utilized to accelerate the simulation. To reduce the communication overhead, a new idea is 
+	proposed for boundary information exchange among processors. This strategy exibits optimal minimum
+	communication overhead. Experiment results on several industrial and large scale benchmarks show that the proposed method 
+	achieves more than 110X speedup over a state-of-the-art direct LU solver. Besides, it is the first time 
+	reported in this paper that power grids contains over 190M nodes can be sucessfully solved only in less than 5 minutes.
 \end{abstract}
 
 \section{Introduction}
 	For consideration of signal integrity, verification and further design optimization, powergrid analysis is one of the most 
-	important step. To shorter the design period and cost, power grid simulation should be finished within a resonable time. 
-	However, with the fast increase in scale of VLSI circuits, nowadays, power grid usually contains millions or even hundreds 
-	of millions of nodes. The large problem size has made efficiently analyzing power grid a very chanllenging task by two aspects. 
-	On one hand, it would be prohibitively expensive for traditional solvers such as 
-	direct LU to solve the problem within a reasonable time. On the other hand, traditional methods may suffer a memory bottle 
-	neck, which makes them uncapable to process the large or very large size problem. As a result, it is strongly required to 
-	develop an efficient solver to address these problems.\\
+	important steps. To shorten the design period and cost, power grid simulation should be finished within a resonable amount
+	of time. 
+	However, with the fast increase of VLSI circuit scale, nowadays, power grid usually contains millions or even hundreds 
+	of millions of nodes. The large problem size has made efficiently analyzing power grid a very challenging task by two aspects. 
+	On one hand, it would be prohibitively expensive for traditional solvers such as direct LU to solve the problem. On the 
+	other hand, traditional methods may suffer from memory bottle-neck, which makes them incapable to process the large or very
+	large size problems. As a result, it is strongly required to develop an efficient solver to overcome these problems.\\
 %\begin{comment}
 	\begin{figure}[htbp]
 	  \subfigure[][2D view of a power grid]{
@@ -60,7 +58,7 @@
 	  \label{pg_model}
 	\end{figure}
 
-	Figure~\ref{pg_model} shows a two layer simplified power grid model without capacitors and inductances. Vias are used to 
+	Figure~\ref{pg_model} shows a two layer simplified power grid model without capacitor or inductor. Vias are used to 
 	connect different layers. If transient analysis is performed, RLC model can be used.\\ 
 
 	It is well known that analyzing the power grid equals to solving a linear system, where 
@@ -69,31 +67,31 @@
 		Ax=b
 	\end{equation}
 	There are several serial simulation techniques developed to solve Equation \eqref{eq1}, including multigrid\cite{kozhaya}, 
-	PCG\cite{Tsung-Hao}, random walks\cite{Boghrati}, domain-decomposition\cite{Quming}\cite{Zhongyu}, and so on. Random walks 
-	is a stastical based method, and is only efficient for simulating small subset of nodes, not all the nodes in grid. 
-	It will either be time consuming to solve all the nodes in grid, or will introduce inaccuracy in solution. The problems will
-	deteriorate for large size power grid with only a few number of VDD/GND sources. Besides, when modeling with vias, this method
-	can be trapped by vias, making the program hang forever. PCG method in\cite{Tsung-Hao} is known as the fastest linear solver 
-	for large symmetric partial differential equations. But the total performance depends on the number of iterations. If the 
-	iteration times is small, due to larger effort per iteration for PCG then other simpler methods such as Gauss-sidel, it may 
-	not be a good choice. Besides, compared to GS, PCG consumes more memory, which will limit the maximum problem size that can be 
-	solved.\\  	
+	PCG\cite{Tsung-Hao}, random walks\cite{Boghrati}, domain-decomposition\cite{Quming,Zhongyu}, and so on. Random walks 
+	is a stastical based method, and is only efficient for simulating small subset of nodes, for eg., several thousand nodes.
+	When it comes to the whole grid, it will either be time consuming to get solution, or will introduce error. The problems
+	will deteriorate for larger size power grid with only a few number of VDD/GND sources. Besides, when modeling with vias, 
+	this method can be trapped by vias, result in no convergence. PCG method in\cite{Tsung-Hao} is known as the fastest 
+	linear solver 
+	for large symmetric partial differential equations. But the total performance depends on the number of iterations. If the
+	system is well-conditioned, only a few iterations are needed for convergence. In this case, due to larger effort per iteration
+	for PCG than other simpler methods such as Gauss-sidel, as well as the fact that PCG consumes more memory, the total 
+	performance of PCG may not be better than other simpler methods.\\	
 	
-	Multigrid method achieves near linear solve time with input size. The fine grid is recursively restricted into coarse ones 
-	and the solution from coarse grids will be interpolated back into fine ones. There are geometric based multigrid method as well as 
-	algebraic based multigrid method. For both methods, because of restriction and interpolation, only approximate solution can be 
-	obtained. The error can be intractable for large power grids. Domain decomposition is based on idea of "divide and conquer". 
+	Multigrid method achieves near linear simulation time with input size. The fine grid is recursively restricted into coarse ones 
+	and the solution from coarse grids will be interpolated back into fine ones. Because of restriction and interpolation, 
+	only approximate solution can be obtained. The error can be intractable for large or ill-conditioned system. Domain 
+	decomposition is based on the idea of ``divide and conquer". 
 	There are two kinds of domain decomposition(DD): Schur Complement DD and Additive Schwarz DD. The main difference is that Shur 
-	Complement DD partitions find grid into subdomains
-	and a common interface, while in Additive Schwarz DD, there is no interface between subdomains. Overlapping can be introduced to
-	Additive Schwarz DD when partitioning, for example\cite{Zhongyu}. The limitation of Schur Complement DD is that because of the 
-	interface subdomain, there is a dense schur matrix. The dense characteristic limits the interface size, and thus decides Schur 
-	Complement DD can not solve too large a problem.\\
+	Complement DD partitions find grid into subdomains with a common interface, while in Additive Schwarz DD, there is no 
+	interface between subdomains. Besides, overlapping can be introduced in Additive Schwarz DD. For Complement DD method, 
+	the dense characteristic of schur matrix limits the interface size to be small. As a result, this method can not solve too 
+	large problems.\\
 
 	Considering the fact that power grid is usually in large size, even for an efficient serial solver, more and more time would be
 	spent for simulation. When the input size is above some scale, the simulation time would be inprohibitely expensive.
-	Besides, serial algorithms do not have enough memory to hold the very large scale grid size. On the other hand, parallelism is 
-	possible for some algorithm, and can thus bring a lot of speed up. Considering as well that architectures as multi-core platform 
+	Besides, the memory bottle-neck is also a problem for single processor. On the other hand, parallelism is 
+	possible for some algorithm, and can thus bring a lot of speed up. In addition, considering architectures as multi-core platform 
 	can potentially overcome the memory issue, parallel technique is a promising tendancy to realize a good simulator.\\ 
 
 	There are already several published work about analyzing power grid with parallel methods, including multigrid on GPU\cite{Zhuofeng}, parallel direct LU 
