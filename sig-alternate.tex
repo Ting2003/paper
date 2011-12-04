@@ -68,6 +68,38 @@ Figure~\ref{pg_model} shows a two layer simplified power grid model for DC analy
 In the above equation, $G$ is the system conductance matrix, $u$ is the voltage solutions for each node, and $I$ is the current 
 extracted from each node.
 
+%\begin{comment}
+	There are several serial simulation techniques developed to solve Equation \eqref{eq1}, including multigrid\cite{kozhaya}, 
+	PCG\cite{Tsung-Hao}, random walks\cite{Boghrati}, domain-decomposition\cite{Quming,Zhongyu}, and so on. Random walks 
+	is a stastical based method, and is only efficient for simulating a small subset of nodes, for eg., several thousand nodes.
+	When it comes to the whole grid, it will either be time consuming to get solution, or will introduce error. The problems
+	will deteriorate for larger size power grid with only a few number of VDD/GND sources. Besides, when modeling with vias, 
+	this method can be trapped by vias, result in no convergence. PCG method in\cite{Tsung-Hao} is known as the fastest 
+	linear solver 
+	for large symmetric partial differential equations. But the total performance depends on the number of iterations. If the
+	system is well-conditioned, only a few iterations are needed for convergence. In this case, due to larger effort per iteration
+	for PCG than other simpler methods such as Gauss-sidel, as well as the fact that PCG consumes more memory, the total 
+	performance of PCG may not be better than other simpler methods.\\	
+	
+	Multigrid method achieves near linear simulation time with input size. The fine grid is recursively restricted into coarse ones 
+	and the solution from coarse grids will be interpolated back into fine ones. Because of restriction and interpolation, 
+	only approximate solution can be obtained. The error can be intractable for large or ill-conditioned system. Domain 
+	decomposition is based on the idea of ``divide and conquer". 
+	There are two kinds of domain decomposition(DD): Schur Complement DD (SCM) and Additive Schwarz DD (ASM). The main difference 
+	is that Shur 
+	Complement DD partitions find grid into subdomains with a common interface, while in Additive Schwarz DD, there is no 
+	interface between subdomains. For SCM, 
+	the dense characteristic of schur matrix limits the interface size to be small. As a result, this method can not solve too 
+	large problems at low cost.\\
+
+	Considering the fact that power grid is usually in large size, even for an efficient serial solver, more and more time would be
+	spent for simulation. When the input size is above some scale, the simulation time would be intrackable.
+	Besides, the memory bottle-neck is also a problem for single processor. On the other hand, there is potential parallelism with
+	some algorithms to solve this problem, for example, DD. Combining the fact that architectures as multi-core platform 
+	can overcome the memory bottle-neck, implementing a parallel method is a promising way to achieve a efficient solver for 
+	large scale power grid analysis.\\ 
+%\end{comment}
+
 	Considering the fact that power grid is usually in large size, even for an efficient serial solver, more and more time would be
 	spent for simulation. When the input size is above some scale, the simulation time would be intrackable.
 	Besides, the memory bottle-neck is also a problem. There will not be enough memory to hold the large size data. To address the
