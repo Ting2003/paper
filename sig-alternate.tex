@@ -30,7 +30,7 @@ LU solver. Power grid containing over 190M nodes could be solved within 5 minute
 \end{comment}
 
 \begin{abstract}
-Due to the development of CMOS process technology, the size of power grids are becoming larger and larger. There are usually 
+Due to the development of CMOS process technology, the size of power grids is becoming larger and larger. There are usually 
 multi-million nodes in power grids. Analyzing the large size power grid has become very expensive in both time and memory. This paper 
 presents an efficient parallel iterative Additive Schwarz Method (ASM) for large-scale power grid simulation. Based on distributed 
 memory system, a new 
@@ -68,41 +68,8 @@ Figure~\ref{pg_model} shows a two-layer simplified power grid model for DC analy
 	\end{equation}
 In the above equation, {$\textbf{G}$} is the system conductance matrix, $\textbf{u}$ and $\textbf{I}$ are respectively voltage vector and current vector.
 
-\begin{comment}
-	There are several serial simulation techniques developed to solve Equation \eqref{eq1}, including multigrid\cite{kozhaya}, 
-	PCG\cite{Tsung-Hao}, random walks\cite{Boghrati}, domain-decomposition\cite{Quming,Zhongyu}, and so on. Random walks 
-	is a stastical based method, and is only efficient for simulating a small subset of nodes, for eg., several thousand nodes.
-	When it comes to the whole grid, it will either be time consuming to get solution, or will introduce error. The problems
-	will deteriorate for larger size power grid with only a few number of VDD/GND sources. Besides, when modeling with vias, 
-	this method can be trapped by vias, result in no convergence. PCG method in\cite{Tsung-Hao} is known as the fastest 
-	linear solver 
-	for large symmetric partial differential equations. But the total performance depends on the number of iterations. If the
-	system is well-conditioned, only a few iterations are needed for convergence. In this case, due to larger effort per iteration
-	for PCG than other simpler methods such as Gauss-sidel, as well as the fact that PCG consumes more memory, the total 
-	performance of PCG may not be better than other simpler methods.\\	
-	
-	Multigrid method achieves near linear simulation time with input size. The fine grid is recursively restricted into coarse ones 
-	and the solution from coarse grids will be interpolated back into fine ones. Because of restriction and interpolation, 
-	only approximate solution can be obtained. The error can be intractable for large or ill-conditioned system. Domain 
-	decomposition is based on the idea of ``divide and conquer". 
-	There are two kinds of domain decomposition(DD): Schur Complement DD (SCM) and Additive Schwarz DD (ASM). The main difference 
-	is that Shur 
-	Complement DD partitions find grid into subdomains with a common interface, while in Additive Schwarz DD, there is no 
-	interface between subdomains. For SCM, 
-	the dense characteristic of schur matrix limits the interface size to be small. As a result, this method can not solve too 
-	large problems at low cost.\\
-
-	As the size of power grids grows, simulation time will become more and more, and even be unacceptable. This is true even
-	for a efficient serial solver. Besides, the memory bottleneck is also a problem. There is not enough memory to hold the large 
-	size data. To address the simulation time issue, parallel methods should be taken into consideration. For example, Domain 
-	Decomposition method can be used to simulate power grids in parallel. Furthermore, parallel architecture can
-	be utilized to overcome the memory bottleneck. For example, in distributed memory system, more processors will bring bigger memory
-	size. As a result, implementing a parallel method is a promising way to achieve an efficient solver for 
-	large-scale power grids analysis.\\ 
-\end{comment}
-
-	Because power grids are usually in large size, more and more time would be
-	spent for simulation. When the size of problem is large enough, the simulation time would be intrackable. This is true even
+	Because power grids are usually in large size, more and more time will be
+	spent for simulation. When the size of problem is large enough, the simulation time will be intractable. This is true even
 	for a efficient serial solver.
 	Besides, the memory bottleneck is also a problem. There will not be enough memory to hold the large size data. To address the
 	simulation time issue, parallel methods should be taken into consideration. For example, with "divide and
@@ -115,11 +82,11 @@ In the above equation, {$\textbf{G}$} is the system conductance matrix, $\textbf
 	GPU\cite{Zhuofeng}, parallel direct LU 
 	solver\cite{Super_LU_website} and public parallel domain decomposition method\cite{PETSC_website, kaisun, voronov}. Although 
 	GPU-based multigrid method\cite{Zhuofeng} is very fast, large error may be
-	introducted in final solution due to the interpolation and restriction
+	introduced in final solution due to the interpolation and restriction
 	process, especially for ill-conditioned systems. SuperLU\_MT and SuperLU\_DIST are two parallel direct LU 
 	solvers developed in \cite{Super_LU_website}. SuperLU\_MT is 
 	based on shared memory system. Limited by the number of threads, not too much speedup can be gained. 
-	It is reported to be only 5X to 10X faster than commecially popular solvers\cite{Super_LU_website}. Besides, the largest 
+	It is reported to be only 5X to 10X faster than commercially popular solvers\cite{Super_LU_website}. Besides, the largest 
 	problem that can be solved by this method is limited by the system memory of a single processor or core. SuperLU\_DIST 
 	is developed based on distributed memory system. Master processor is used to read in the whole grid and build a global 
 	matrix, then distribute the subdomain matrices to other processors. 
@@ -127,9 +94,9 @@ In the above equation, {$\textbf{G}$} is the system conductance matrix, $\textbf
 	it only needs to solve one subdomain. Hence, the largest problem that can be handled by this method can not be very large. In 
 	\cite{Super_LU_website}, the largest problem size that can be solved by SuperLU\_DIST is reported to be two-million.
 
-	Domain decomposition is very suitable for parallelization, there are many independent subdomains which can be
+	Domain decomposition is very suitable for parallelization, since there are many independent subdomains that can be
 	solved in parallel at each iteration. There are two types of Domain Decomposition method, including Schur Complement Method (SCM) 
-	and Additive Schwarz Method (ASM). Schur Complement Method produces a dense matrix which is time consuming to form and solve. It
+	and Additive Schwarz Method (ASM). Schur Complement Method produces a dense matrix that is time consuming to form and solve. It
 	is not suitable for large-scale power grid analysis. On the other hand, Additive Schwarz Method will not introduce this problem 
 	and is fit for the power grid analysis. PETSC\cite{PETSC_website} is an implementation of ASM.
 	However, there are several limitations. First, PETSC can only handle 2D regular grid. 
@@ -145,7 +112,7 @@ In the above equation, {$\textbf{G}$} is the system conductance matrix, $\textbf
 	\begin{enumerate}[1)]
 	\item Based on distributed memory system, a new data storage method is proposed to eliminate the memory bottleneck of
 	the above mentioned methods. Very large-scale power grid size can be efficiently handled.
-	\item An overlapping techinque for 3D irregular grid is proposed to allow faster convergence. 
+	\item An overlapping techinique for 3D irregular grid is proposed to allow faster convergence. 
 	\item A new data communication strategy is proposed. It achieves minimum communication overhead.
 	\item A via detection technique is presented to efficiently reduce the size of conductance matrix without any loss of accuracy.
 	\item A grouping technique is introduced to further increase parallelism.
@@ -297,8 +264,11 @@ In the above equation, {$\textbf{G}$} is the system conductance matrix, $\textbf
 	its neighbors finish the sending or receiving operations. For example, 
 	assume there are only two neighboring subdomains in the grid: ``A" and ``B". ``A" needs to send data to ``B", while ``B" needs
 	to send data to ``A". ``B" can not start until ``A" finish its operation. The serial process results in 
-	longer start up time. As a lot of iterations may be required before reaching convergence, the total 
-	start up time should not be ignored. The above problems can be overcomed by the new strategy presented in the following paragraphs.
+	longer start up time. In 2D partitioned power grids, there are much more neighboring subdomains. This leads to much 
+	longer start up time. The worse thing is that the control flow is much more complicated, since each subdomain have more 
+	neighboring subdomains involved in sending and receiving data. Furthermore, even the control flow is realized, for a large size of
+	power grid, a lot of iterations may be required before reaching convergence. As a result, the total start up time should not be 
+	ignored. The above problems can be overcame by the new strategy presented in the following paragraphs.
 
 %\begin{comment}
 	\begin{figure}[htbp]
@@ -321,16 +291,17 @@ In the above equation, {$\textbf{G}$} is the system conductance matrix, $\textbf
 
 	It is observed that geometrical information can be utilized to overcome the above difficulties. For each processor, we allocate 
 	a local inter and outer boundary array, to store the boundary nodes' value. Based on the geometrical 
-	characteristic of inter and outer boundary nodes, we divide each type of nodes into 8 node sets. Each array stores 8 
-	corresponding node sets' values in the increasing order of neighboring subdomains' index.  
-	For example, for subdomain 5, ``south east" node set of its outer boundary array stores internal boundary nodes' value of 
-	south east neighboring subdomain, which is subdomain 3, while ``south east" node set in inter boundary array stores outer 
-	boundary nodes' value of south east neighboring subdomain, which is subdomain 7. Boundary nodes within 
-	these node sets are sorted according to their 3D coordinates, so that they are insensitive to 3D irregular structure. With the
-	geometrical relationship and indexing pattern, it is easy to access the boundary nodes' value. 
+	characteristic of inter and outer boundary nodes, we divide each type of nodes into 8 node sets. Each node set represents the
+	geometrical relationship between two neighboring subdomains. For example, ``south east" node set in the outer boundary of 
+	subdomain 5 stores a inter boundary node set's value of subdomain 3. We define this node set as ``south east" node set in inter
+	boundary array of subdomain 3. This is because subdomain 3 is to the ``south east" of subdomain 5. Based on this relationship,
+	it is easy to locate the boundary node set from neighboring subdomains. Each array stores 8 corresponding node sets' values in 
+	the increasing order of neighboring subdomains' index.  Boundary nodes within 
+	these node sets are sorted according to their 3D coordinates. As a result, it is insensitive to 3D irregular structure. With the
+	geometrical relationship and coordinates, it is easy to access a boundary node's value from neighboring subdomains. 
 
 	After each iteration, each subdomain has new solutions for all internal nodes. The inter 
-	boundary nodes' value will then be copied into local inter boundary array. Processor 0 gathers these arrays from each subdomain
+	boundary nodes' value will then be copied into local inter boundary array. Processor ``0" gathers these arrays from each subdomain
 	into a global inter boundary array owned by processor ``0". Then, this array will be reordered to generate the global outer 
 	boundary array. This array
 	contains all the outer boundary nodes' value for each subdomain. 
@@ -383,7 +354,7 @@ In the above equation, {$\textbf{G}$} is the system conductance matrix, $\textbf
 	It is also observed that if a via has very small resistance value, it can also be treated as ``shortened" one 
 	without any loss of accuracy. We set a threshold value for via nets. Via nets 
 	whose values are below this threshold will be substituted with ``shortened" nets. Without loss of accuracy, this threshold value 
-	is experimentally setted to be 1e-5. 
+	is experimentally tuned to be 1e-5. 
   \subsection{Grouping technique} 
 	Power grid usually contains several physically disjoint components, for example, VDD and GND sub-circuit. With multi-voltage 
 	technique, more components can be included, for example, VDD2 circuit. Since these components are totally independent, they can
@@ -408,10 +379,10 @@ In the above equation, {$\textbf{G}$} is the system conductance matrix, $\textbf
 	\end{equation}
 	In the experiment, overlapping ratio is defined to be the ratio between half of the overlapping length to the total side length of 
 	a subdomain. To achieve a good balance between iteration numbers and matrix size, overlapping ratio is experimentally 
-	setted to be 0.2.
+	settled to be 0.2.
 			
 	Three sets of benchmarks are used for comparison, including 
-	industrial benchmarks pg3 to pg6, x250, x200, y250, y200 and 4 artificially produced benchmarks. pg3 to pg6 are 
+	IBM power grid benchmarks pg3 to pg6, x250, x200, y250, y200 and 4 artificially produced benchmarks. pg3 to pg6 are 
 	small size wire bond type benchmarks with vias, x250, x200 and y250, y200 are respectively two median C4 type benchmarks with
 	shortened vias or regular vias. The 4 large-scale benchmarks are all C4 type grids with vias. Simulation results are 
 	listed in Table \ref{tb_p}, \ref{tb_v}, \ref{tb_s}, \ref{tb_m}, and \ref{tb_l}.
@@ -428,7 +399,6 @@ In the above equation, {$\textbf{G}$} is the system conductance matrix, $\textbf
 	%\begin{table}[h]
   	  \include{./tables/table_large} \label{tb_l}
 	\end{table}
-
 	The meanings of items in the tables are as follows: Ckt: name of testing power grid; \#N: total number of nodes in the circuit; 
 	\#B: number of blocks; \#C: number of disjoint components; \#Rep: number of representative nodes; 
   	$t_N$: simulation time with original nodes; $t_{Rep}$: simulation time with representative nodes; 
@@ -449,19 +419,18 @@ In the above equation, {$\textbf{G}$} is the system conductance matrix, $\textbf
 
 	Table \ref{tb_s}, \ref{tb_m} exhibits the obvious advantage of the proposed method. There is a tremendous 
 	speedup over direct LU solver. For each benchmark, there is at least tens of speedup. The biggest speedup is over 110X. 
-	%%%%% need to add more data nodes to show the limitation of over much processors.
-	%If more processors can get allocated, it is possible to further decrease the runtime.\\
 
 	Table \ref{tb_l} shows that the proposed method successfully finishes the simulation of large-scale power grids
-	in a short time, while LU can not handle the problem, due to its large size. In the experiment, the largest problem that LU can solve is 
-	around 8M nodes per component. 
+	in a short time, while LU can not handle the problem, due to its large size. In the experiment, the largest problem that LU 
+	can solve is around 8M nodes in each component. 
 
-	It should be noticed that since each processor in the multi-core system has smaller memory size, grid needs to be 
+	It should be noticed that since each processor in the distributed memory system has smaller memory size, grid needs to be 
 	partitioned into enough subdomains so that each subdomain is small enough to be loaded in memory. Because each processor handles 
 	one 
 	subdomain, enough processors will be needed. For large-scale benchmarks, if there is sufficient processor resource, several 
 	components can be solved simultaneously. Otherwise, those components should be 
-	solved sequentially. In Table \ref{tb_l}, netlist\_32M, netlist\_72M and netlist\_108M are 
+	solved sequentially. In Table \ref{tb_l}, netlist\_32M, netlist\_72M and netlist\_
+	108M are 
 	simulated with components being solved simultaneously. For netlist\_144M and 
 	netlist\_192M, as not enough processors can get allocated, components are solved sequentially.
 
