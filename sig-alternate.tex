@@ -11,7 +11,7 @@
 \graphicspath{{./figures/}}
 
 \begin{document}
-\title{A New Parallel Method for Power Grid Simulation based on Distributed Memory System}
+\title{A New Parallel Method for Power Grid Simulation Based on Distributed Memory System}
 
 %\author{Ting Yu, Zigang Xiao, Martin.D.F. Wong}
 %	{Depart of Electrical and Computer Engineering, UIUC\\
@@ -154,15 +154,6 @@ In the above equation, {$\textbf{G}$} is the system conductance matrix, $\textbf
 	But the equivalent subdomain size is increased as well, which will deteriorate the performance. As a result, there is a 
 	balance point of overlapping ratio to gain the optimal performance.
 
-%\begin{comment}
-	SOR, PCG, MG methods can be combined with ASM to accelerate convergence. However, there are limitations of the resulting
-	methods. In SOR method, $w$ is used to accelerate convergence. However, the optimal $w$ value depends on system matrix 
-	eigenvalues. It is hard to choose the optimal $w$ for large
-	size problem, and a bad $w$ value can even lead to divergence; MG may have
-	error or even convergence problem, especially for 3D irregular grid; In PCG, a global
-	matrix is required, which limits the maximum problem size that can be solved.
-%\end{comment}
-
 	There are already works talking about parallelization of overlapping ASM, such as\cite{kaisun}. The are several problems in 
 	\cite{kaisun}. First one is that since each processor holds all the nodes' value of the whole grid, the memory bottleneck
 	is not alleviated. Second, the communication strategy is not efficient: After each iteration, all the
@@ -172,8 +163,17 @@ In the above equation, {$\textbf{G}$} is the system conductance matrix, $\textbf
 	subdomains. However, because of overlapping and 3D irregular grid structure, it is a challenging problem. Section 3
 	gives a detail illustration of the situation.
  
-\section{Parallel Implementation On \\Multi-core Processors}
-  \subsection{Parallel platform}
+%\begin{comment}
+	Besides, SOR, PCG, MG (multigrid) methods can be combined with ASM to accelerate convergence. However, there are limitations of 
+	the resulting
+	methods. In SOR method, $w$ is used to accelerate convergence. However, the optimal $w$ value depends on system matrix 
+	eigenvalues. It is hard to choose the optimal $w$ for large
+	size problem, and a bad $w$ value can even lead to divergence; MG may have
+	error or even convergence problem, especially for 3D irregular grid; In PCG, a global
+	matrix is required, hence the maximum problem size that can be solved is limited.
+%\end{comment}
+\section{Parallel implementation on \\distributed memory system}
+  \subsection{Parallell system}
 	There are mainly two types of parallel architectures: shared memory and distributed memory system. In shared 
 	memory system, 
 	multiple cores share common address space. There is no overhead for data communication. However, both the number
